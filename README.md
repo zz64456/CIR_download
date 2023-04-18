@@ -2,11 +2,19 @@
 
 Download CIR pdf files in order.
 
+-----
+
 ## Environment
 
-1. Python 3.7 or newer version
-2. pip
+1. Windows 10 or newer version
+2. Python 3.7 or newer version
+3. pip
 
-## Please install packages first
+## Packages Installation
 
-Run `pip install -r requirements.txt`
+cmd run:
+`pip install -r requirements.txt`
+
+## Usage
+
+> dict/CIR_downloader.exe
