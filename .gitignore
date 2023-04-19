@@ -2,3 +2,5 @@
 pdf/
 build/
 dist/log/
+log/
+result/

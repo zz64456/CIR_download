@@ -119,7 +119,7 @@ def downloader(alphabet, target, index):
     file_name = target.get_attribute('href').split('.pdf')[0].split('/')[-1]
     print(f'\nfilename =>   [ {file_name} ]')
 
-    destination_directory = f'C:\\Users\\z5202\\training\\parse-CIR\\pdf\\{alphabet}'
+    destination_directory = f'pdf\\{alphabet}'
     if not os.path.isdir(destination_directory):
         os.makedirs(destination_directory)
 
@@ -137,14 +137,14 @@ def downloader(alphabet, target, index):
             t += 1
             print('not yet..')
             time.sleep(1)
-            if os.path.isfile(f'C:\\Users\\z5202\\training\\parse-CIR\\pdf\\{file_name}.pdf'):
+            if os.path.isfile(f'pdf\\{file_name}.pdf'):
                 finish = True
                 print('Download is finished')
         try:
-            os.replace(f'C:\\Users\\z5202\\training\\parse-CIR\\pdf\\{file_name}.pdf', path)
+            os.replace(f'pdf\\{file_name}.pdf', path)
         except Exception as e:
             print(e)
-            logger.error(f'alphabet => {alphabet}, ingredient => {index},  [ accept_status_string ] failed.')
+            logger.error(f'alphabet => {alphabet}, ingredient => {index},  Replace failed.')
 
         print('\nFile added !')
 
@@ -152,13 +152,16 @@ def downloader(alphabet, target, index):
         print("\nExists already")
 
 
+
+
+# web driver init
+chrome_browser = initialize_parser()
+
+# Action chains init
+actions = ActionChains(chrome_browser)
+
+
 def main():
-    
-
-    # web driver initial
-    chrome_browser = initialize_parser()
-    actions = ActionChains(chrome_browser)
-
     alphabets_div = chrome_browser.find_element(By.CLASS_NAME, 'glossary ')
     alphabets = alphabets_div.find_elements(By.CLASS_NAME, 'glossary-letter')
 
@@ -187,116 +190,135 @@ def main():
             print(str(e))
 
 
+        time.sleep(2)
+
+        download_list = choose_file_to_download(alphabet, buttons, childs_window)
+
+        result_directory = 'result'
+        if not os.path.isdir(result_directory):
+            os.makedirs(result_directory)
+
+        path = f'{result_directory}\\{alphabet}-result.txt'
+        with open(path, 'w') as f:
+            for ingredient in download_list:
+                f.write(ingredient+'\n')
         
         
-        # list
-        through = list()
-        index = 0
+        
+
+
+def choose_file_to_download(alphabet, buttons, childs_window):
+    # list
+    through = list()
+    index = 0
 
 
 
-        # buttons = buttons[:]        # 測試用
+    # buttons = buttons[:]        # 測試用
 
-        for button in buttons:
+    for button in buttons:
+        
+        
+
+        # 定位項目 item
+        print('\n*************  ', button.text, ' *************\n')
+        time.sleep(1)
+
+        # 重置滑鼠
+        actions.reset_actions()
+
+
+        # 點擊item(人名)，打開pdf選擇視窗
+        actions.move_to_element(button).click()
+        actions.perform()
+
+
+        time.sleep(1)
+
+        # 切換到pdf選擇視窗
+        chrome_browser.switch_to.window(chrome_browser.window_handles[-1])
+        print("Switch to pdf page: " + str(chrome_browser.current_url) + '\n')
+
+        target_table = fetch_target_table(chrome_browser)
+        if target_table is False:
             
+            print('\nPDF表格獲取失敗')
+            print('結束爬蟲')
+            logger.error(f'alphabet => {alphabet}, index => {index},  [ fetch_target_table ] failed.')
+            return
             
+        target_trs   = target_table.find_elements(By.XPATH, './tr')
 
-            # 定位項目 item
-            print('\n*************  ', button.text, ' *************\n')
+        del(target_trs[0])
+
+        
+        # download = False
+        latest_year = 1500
+        tr_index = 1
+        escape_status_string = ['Insufficient', 'not opened', 'Re-evaluation', 'No Reported Uses']
+        accept_status_string = ['Published Report', 'Final Report']
+        for tr in target_trs:
             time.sleep(1)
+            
+            year = []
 
-            # 重置滑鼠
-            actions.reset_actions()
+            tds = tr.find_elements(By.XPATH, './td')
 
+            ingredient = tds[0].find_element(By.XPATH, './font[@class="regtext"]')
+            status     = tds[1].find_element(By.XPATH, './table/tbody/tr/td/table/tbody/tr/td/font/a')
+            date       = tds[2].find_element(By.XPATH, './font')
 
-            # 點擊item(人名)，打開pdf選擇視窗
-            actions.move_to_element(button).click()
-            actions.perform()
+            if ingredient.text not in through:
+                through.append(ingredient.text)
 
+            # if status.text not in accept_status_string:
+            if status.text in escape_status_string:
+                logger.warning(f'alphabet => {alphabet}, index => {index}, tr_index => {tr_index}')
+                logger.warning(f'{status.text},  [ accept_status_string ] failed.')
+                continue
 
-            time.sleep(1)
-
-            # 切換到pdf選擇視窗
-            chrome_browser.switch_to.window(chrome_browser.window_handles[-1])
-            print("Switch to pdf page: " + str(chrome_browser.current_url) + '\n')
-
-            target_table = fetch_target_table(chrome_browser)
-            if target_table is False:
+            if len(date.text) > 0:
+                print(f'date_{tr_index} => ', date.text)
                 
-                print('\nPDF表格獲取失敗')
-                print('結束爬蟲')
-                logger.error(f'alphabet => {alphabet}, index => {index},  [ fetch_target_table ] failed.')
-                return
+                # for data like 'IJT 35(Suppl. 3):16-33, 2016'
+                if ', ' in date.text:
+                    year = date.text.split(', ')
+                elif ',' in date.text:
+                    year = date.text.split(',') 
                 
-            target_trs   = target_table.find_elements(By.XPATH, './tr')
+                # for data like '03/08/2022'
+                if len(year) > 1:
+                    year = year[1]
+                else:
+                    year = date.text.split('/')[2]
 
-            del(target_trs[0])
+                if int(year) >= int(latest_year):
+                    latest_year = year
+                    target = status
+            tr_index += 1
 
             
-            # download = False
-            latest_year = 1500
-            tr_index = 1
-            escape_status_string = ['Insufficient', 'not opened', 'Re-evaluation', 'No Reported Uses']
-            accept_status_string = ['Published Report', 'Final Report']
-            for tr in target_trs:
-                time.sleep(1)
-                
-                year = []
+        print('latest_year: ',latest_year)
+            
+        time.sleep(1)
 
-                tds = tr.find_elements(By.XPATH, './td')
+        downloader(alphabet, target, index)
 
-                ingredient = tds[0].find_element(By.XPATH, './font[@class="regtext"]')
-                status     = tds[1].find_element(By.XPATH, './table/tbody/tr/td/table/tbody/tr/td/font/a')
-                date       = tds[2].find_element(By.XPATH, './font')
-
-                if ingredient.text not in through:
-                    through.append(ingredient.text)
-
-                if status.text not in accept_status_string:
-                    logger.warning(f'alphabet => {alphabet}, index => {index}, tr_index => {tr_index}')
-                    logger.warning(f'{status.text},  [ accept_status_string ] failed.')
-                    continue
-
-                if len(date.text) > 0:
-                    print(f'date_{tr_index} => ', date.text)
-                    
-                    # for data like 'IJT 35(Suppl. 3):16-33, 2016'
-                    if ', ' in date.text:
-                        year = date.text.split(', ')
-                    elif ',' in date.text:
-                        year = date.text.split(',') 
-                    
-                    # for data like '03/08/2022'
-                    if len(year) > 1:
-                        year = year[1]
-                    else:
-                        year = date.text.split('/')[2]
-
-                    if int(year) >= int(latest_year):
-                        latest_year = year
-                        target = status
-                tr_index += 1
-
-                
-            print('latest_year: ',latest_year)
-                
-            time.sleep(1)
-
-            downloader(alphabet, target, index)
-
-            time.sleep(1)
+        time.sleep(1)
 
 
-            print('\nnums: ',len(through))
-            print(through)
+        print('\nnums: ',len(through))
+        print(through)
 
-            index += 1
+        index += 1
 
 
 
-            chrome_browser.close()
+        chrome_browser.close()
 
-            chrome_browser.switch_to.window(childs_window[alphabet])
+        chrome_browser.switch_to.window(childs_window[alphabet])
+
+    return through
 
 
 
