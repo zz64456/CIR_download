@@ -77,7 +77,7 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
     through = list()
     index = 0
 
-    buttons = buttons[36:]        # 測試用
+    # buttons = buttons[36:]        # 測試用
 
     actions = ActionChains(chrome_browser)
 
