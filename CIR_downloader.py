@@ -11,6 +11,11 @@ from thread import MyThread
 
 
 
+first = 'Null'
+last  = 'Null'
+
+
+
 def check_main_path():
     if not os.path.isdir(main_path):
         os.makedirs(main_path)
@@ -200,7 +205,8 @@ def signal_handler(signal='', frame=''):
 
 def reset_result_file(alphabet):
     result_path = f'{main_path}\\{alphabet}-result.txt'
-    os.remove(result_path)
+    if os.path.isfile(result_path):
+        os.remove(result_path)
 
 
 
@@ -215,15 +221,15 @@ def main():
 
     window = tk.Tk()
     window.title('CIR parser')
-    window.geometry("300x100")
+    window.geometry("500x100")
     # 標示文字
     label = tk.Label(window, text = 'Download path:')
     label.pack()
 
     # 輸入欄位
     entry = tk.Entry(window, # 輸入欄位所在視窗
-        width = 25) # 輸入欄位的寬度
-    entry.pack()
+        width = 50) # 輸入欄位的寬度
+    entry.pack(pady = 10)
 
     # 建立按鈕
     entry_btn = tk.Button(window, # 按鈕所在視窗
@@ -232,7 +238,7 @@ def main():
     # 以預設方式排版按鈕
     entry_btn.pack(side='top', pady=10)
 
-    window.protocol("WM_DELETE_WINDOW",signal_handler)
+    window.protocol("WM_DELETE_WINDOW", signal_handler)
 
     window.mainloop()
 

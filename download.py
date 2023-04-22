@@ -34,8 +34,6 @@ class Downloader:
         childs_window = {}
         count = 0
         for alpha in alphabets:
-            if count > 2:
-                break
 
             windows_old = chrome_browser.window_handles
 
