@@ -86,7 +86,7 @@ class Downloader:
             target.click()
             finish = False
             t = 0
-            timeout = 10
+            timeout = 15
             while finish is not True and t < timeout:
                 finish = False
                 t += 1

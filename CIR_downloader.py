@@ -3,10 +3,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support import expected_conditions as EC
 import logging
-import time, os, sys, signal
+import time, os, sys, signal, threading
 import tkinter as tk
 from download import Downloader
 from loggy import setup_logging
+from thread import MyThread
 
 
 
@@ -28,7 +29,7 @@ def download(path, logger):
     chrome_browser = D.initialize_parser()
 
     # Ctrl+C 終止程序
-    signal.signal(signal.SIGINT, signal_handler)
+    # signal.signal(signal.SIGINT, signal_handler)
 
     alphabets_div = chrome_browser.find_element(By.CLASS_NAME, 'glossary ')
     alphabets = alphabets_div.find_elements(By.CLASS_NAME, 'glossary-letter')
@@ -58,16 +59,11 @@ def download(path, logger):
 
         # TODO args[3] - button
 
+        reset_result_file(alphabet)
+
         download_list = choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
 
-        result_directory = 'result'
-        if not os.path.isdir(result_directory):
-            os.makedirs(result_directory)
-
-        path = f'{result_directory}\\{alphabet}-result.txt'
-        with open(path, 'w') as f:
-            for ingredient in download_list:
-                f.write(ingredient+'\n')
+    chrome_browser.quit()
         
         
 
@@ -76,7 +72,7 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
     through = list()
     index = 0
 
-    # buttons = buttons[100:]        # 測試用
+    buttons = buttons[36:]        # 測試用
 
     actions = ActionChains(chrome_browser)
 
@@ -113,7 +109,7 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
         tr_index = 1
         escape_status_string = ['Insufficient', 'not opened', 'Re-evaluation', 'No Reported Uses', 'Use Not Supported']
         accept_status_string = ['Published Report', 'Final Report', 'Scientific Literature Review']
-        accept = []
+        new_status_string = []
         for tr in target_trs:
             time.sleep(1)
             
@@ -133,14 +129,14 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
                 global last
                 last = ingredient.text
 
-            if status.text in escape_status_string:
+            # Skip unknown status
+            if status.text not in accept_status_string:
+                if status.text not in escape_status_string:
+                    new_status_string.append(status.text)
                 continue
-            else:
-                if status.text not in accept_status_string:
-                    accept.append(status.text)
 
             if len(date.text) > 0:
-                print(f'date_{tr_index} => ', date.text)
+                print(f'date_{tr_index}  => ', date.text)
                 
                 # for data like 'IJT 35(Suppl. 3):16-33, 2016'
                 if ', ' in date.text:
@@ -159,11 +155,11 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
                     target = status
             tr_index += 1
 
-        
         # New Status Found
-        if len(accept) > 0:
-            D.logger.warning(f'  alphabet => {alphabet}, index => {index}, tr_index => {tr_index}')
-            D.logger.warning(f'  [ New Status ]  =>  {status.text}')
+        if len(new_status_string) > 0:
+            for status in new_status_string:
+                D.logger.warning(f'  Ingredient  =>  {ingredient.text} , tr_index => {tr_index}')
+                D.logger.warning(f'  [ New Status ]  =>  {status}')
 
             
         print('latest_year: ',latest_year)
@@ -180,6 +176,9 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
 
         index += 1
 
+        result_path = f'{D.main_path}\\{alphabet}-result.txt'
+        with open(result_path, 'a') as f:
+            f.write(ingredient.text+'\n')
 
 
         chrome_browser.close()
@@ -191,12 +190,17 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
 
 
 
-def signal_handler(self, signal, frame):
+def signal_handler(signal='', frame=''):
     print('\n\n------------- 您終止了爬蟲程序 -------------')
     print('\n此次爬蟲...\n')
     print('　第一筆資料為：　　',first)
     print('最後一筆資料為：　　',last)
     sys.exit(0)
+
+
+def reset_result_file(alphabet):
+    result_path = f'{main_path}\\{alphabet}-result.txt'
+    os.remove(result_path)
 
 
 
@@ -224,13 +228,13 @@ def main():
     # 建立按鈕
     entry_btn = tk.Button(window, # 按鈕所在視窗
         text = 'Start',  # 顯示文字
-        command=lambda: download(entry.get(), logger)) # 按下按鈕所執行的函數
-    # entry_btn.place(x=130, y=50)
+        command=lambda: MyThread(download, entry.get(), logger)) # 按下按鈕所執行的函數
     # 以預設方式排版按鈕
     entry_btn.pack(side='top', pady=10)
 
-    window.mainloop()
+    window.protocol("WM_DELETE_WINDOW",signal_handler)
 
+    window.mainloop()
 
 
 
