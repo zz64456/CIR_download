@@ -1,177 +1,51 @@
-from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support import expected_conditions as EC
-from datetime import datetime, timedelta, timezone
 import logging
-import time, os
+import time, os, sys, signal, threading
+import tkinter as tk
+from download import Downloader
+from loggy import setup_logging
+from thread import MyThread
 
 
 
-def setup_logging(logDir):
-    dt1 = datetime.utcnow().replace(tzinfo=timezone.utc)
-    now = dt1.astimezone(timezone(timedelta(hours=8))) # 轉換時區 -> 東八區
-    date_today = datetime.strftime(now, '%Y-%m-%d')
-    
-    logName = date_today + '.log'
-    # logDir  = 'log'
-    logPath = 'log/' + logDir + '/' + logName
-
-    os.makedirs('log/' + logDir,exist_ok=True)
-
-    allLogger = logging.getLogger(logDir+'allLogger')
-    allLogger.setLevel(logging.DEBUG)
-
-    fileHandler = logging.FileHandler(logPath, encoding='utf-8',mode='a')
-    fileHandler.setLevel(logging.INFO)
-
-    streamHandler = logging.StreamHandler()
-    streamHandler.setLevel(logging.WARNING)
-
-    AllFormatter = logging.Formatter("%(asctime)s - [line:%(lineno)d] - %(levelname)s: %(message)s")
-    fileHandler.setFormatter(AllFormatter)
-    streamHandler.setFormatter(AllFormatter)
-
-    allLogger.addHandler(fileHandler)
-    allLogger.addHandler(streamHandler)
-
-    return allLogger
+first = 'Null'
+last  = 'Null'
 
 
 
-
-# logging
-logDir = 'crawler'
-loggerName = logDir+'allLogger'
-setup_logging(logDir)
-logger = logging.getLogger(loggerName)
+def check_main_path():
+    if not os.path.isdir(main_path):
+        os.makedirs(main_path)
 
 
 
+def download(path, logger):
 
+    global main_path
+    main_path = path
+    check_main_path()
 
+    D = Downloader(main_path, logger)
 
-def initialize_parser():
-    options = webdriver.ChromeOptions()
-    options.add_experimental_option('detach', True) # 控制瀏覽器自動關閉
-    options.add_experimental_option('excludeSwitches', ['enable-logging'])
+    # web driver init
+    chrome_browser = D.initialize_parser()
 
-    options.add_experimental_option('prefs', {
-        "download.default_directory": r"C:\Users\z5202\training\parse-CIR\pdf",
-        "download.prompt_for_download": False,
-        "download.directory_upgrade": True,
-        "plugins.always_open_pdf_externally": True
-    })
-
-    chrome_browser = webdriver.Chrome('./chromedriver', options=options)
-    chrome_browser.maximize_window()
-    chrome_browser.get('https://www.cir-safety.org/ingredients') # CIR - INGREDIENTS 網頁
-    return chrome_browser
-    
-
-
-def open_alphabet_tabs(chrome_browser, alphabets):
-    childs_window = {}
-    count = 0
-    for alpha in alphabets:
-        if count > 2:
-            break
-
-        windows_old = chrome_browser.window_handles
-
-        button = alpha.find_element(By.TAG_NAME, 'a')
-        time.sleep(1.5)
-        button.click()
-        count += 1
-        print(f'Finish opening {alpha.text}')
-
-        # matching opened windows
-        windows_new = chrome_browser.window_handles
-        new = list(set(windows_new) - set(windows_old))
-        childs_window[alpha.text] = new[0]
-    return childs_window
-
-
-def fetch_target_table(chrome_browser, try_times = 3, fail_times = 0):
-    # 設置等待時間
-    wait = WebDriverWait(chrome_browser, 10)
-
-    target_table = False
-    location = (By.XPATH, '/html/body/form/table/tbody/tr[2]/td/table/tbody')
-
-    while fail_times < try_times and target_table is False:
-        try:
-            target_table = wait.until(EC.presence_of_element_located(location))
-        except Exception as e:
-            fail_times += 1
-            print('\nFail times:', fail_times)
-            print(str(e))
-            logger.error(str(e))
-
-        
-    return target_table
-
-
-def downloader(alphabet, target, index):
-    
-    # print('\ntarget:', target.get_attribute('href'))
-    file_name = target.get_attribute('href').split('.pdf')[0].split('/')[-1]
-    print(f'\nfilename =>   [ {file_name} ]')
-
-    destination_directory = f'C:\\Users\\z5202\\training\\parse-CIR\\pdf\\{alphabet}'
-    if not os.path.isdir(destination_directory):
-        os.makedirs(destination_directory)
-
-    path = f'{destination_directory}\\{file_name}.pdf'
-    if not os.path.isfile(path):
-        print("\nIt's a new file. Start to Download it.")
-
-        target.click()
-    
-        finish = False
-        t = 0
-        timeout = 10
-        while finish is not True and t < timeout:
-            finish = False
-            t += 1
-            print('not yet..')
-            time.sleep(1)
-            if os.path.isfile(f'C:\\Users\\z5202\\training\\parse-CIR\\pdf\\{file_name}.pdf'):
-                finish = True
-                print('Download is finished')
-        try:
-            os.replace(f'C:\\Users\\z5202\\training\\parse-CIR\\pdf\\{file_name}.pdf', path)
-        except Exception as e:
-            print(e)
-            logger.error(f'alphabet => {alphabet}, ingredient => {index},  [ accept_status_string ] failed.')
-
-        print('\nFile added !')
-
-    else:
-        print("\nExists already")
-
-
-def main():
-    
-
-    # web driver initial
-    chrome_browser = initialize_parser()
-    actions = ActionChains(chrome_browser)
+    # Ctrl+C 終止程序
+    # signal.signal(signal.SIGINT, signal_handler)
 
     alphabets_div = chrome_browser.find_element(By.CLASS_NAME, 'glossary ')
     alphabets = alphabets_div.find_elements(By.CLASS_NAME, 'glossary-letter')
 
-    # CIR 主頁面
-    parent_window = chrome_browser.current_window_handle
+    # 打開字母分頁
+    childs_window = D.open_alphabet_tabs(chrome_browser, alphabets)
 
-
-    # 將字母分頁全部開好
-    childs_window = open_alphabet_tabs(chrome_browser, alphabets)
-
+    # TODO args[2] - alphabet
 
     # 照字母順序A-Z
-    for alphabet in childs_window.keys():
+    for alphabet in childs_window.keys(): 
 
         chrome_browser.switch_to.window(childs_window[alphabet])
         print(f"\nSwitch to Alphabet [{alphabet}]")
@@ -186,121 +60,187 @@ def main():
         except Exception as e:
             print(str(e))
 
+        time.sleep(2)
 
+        # TODO args[3] - button
+
+        reset_result_file(alphabet)
+
+        download_list = choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
+
+    chrome_browser.quit()
         
         
-        # list
-        through = list()
-        index = 0
 
+def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window):
+    # list
+    through = list()
+    index = 0
 
+    buttons = buttons[36:]        # 測試用
 
-        # buttons = buttons[:]        # 測試用
+    actions = ActionChains(chrome_browser)
 
-        for button in buttons:
+    for button in buttons:
+        
+        # 定位項目 item
+        print('\n*************  ', button.text, ' *************\n')
+        time.sleep(1)
+
+        # 重置滑鼠
+        actions.reset_actions()
+
+        # 點擊item(人名)，打開pdf選擇視窗
+        actions.move_to_element(button).click()
+        actions.perform()
+
+        time.sleep(1)
+
+        # 切換到pdf選擇視窗
+        chrome_browser.switch_to.window(chrome_browser.window_handles[-1])
+        print("Switch to pdf page: " + str(chrome_browser.current_url) + '\n')
+
+        target_table = D.fetch_target_table(chrome_browser)
+        if target_table is False:
+            print('\nPDF表格獲取失敗')
+            print('結束爬蟲')
+            D.logger.error(f'alphabet => {alphabet}, index => {index},  [ fetch_target_table ] failed.')
+            return
             
+        target_trs   = target_table.find_elements(By.XPATH, './tr')
+        del(target_trs[0])
+        
+        latest_year = 1500
+        tr_index = 1
+        escape_status_string = ['Insufficient', 'not opened', 'Re-evaluation', 'No Reported Uses', 'Use Not Supported']
+        accept_status_string = ['Published Report', 'Final Report', 'Scientific Literature Review']
+        new_status_string = []
+        for tr in target_trs:
+            time.sleep(1)
             
+            year = []
 
-            # 定位項目 item
-            print('\n*************  ', button.text, ' *************\n')
-            time.sleep(1)
+            tds = tr.find_elements(By.XPATH, './td')
 
-            # 重置滑鼠
-            actions.reset_actions()
+            ingredient = tds[0].find_element(By.XPATH, './font[@class="regtext"]')
+            status     = tds[1].find_element(By.XPATH, './table/tbody/tr/td/table/tbody/tr/td/font/a')
+            date       = tds[2].find_element(By.XPATH, './font')
 
+            if ingredient.text not in through:
+                if len(through) == 0:
+                    global first
+                    first = ingredient.text
+                through.append(ingredient.text)
+                global last
+                last = ingredient.text
 
-            # 點擊item(人名)，打開pdf選擇視窗
-            actions.move_to_element(button).click()
-            actions.perform()
+            # Skip unknown status
+            if status.text not in accept_status_string:
+                if status.text not in escape_status_string:
+                    new_status_string.append(status.text)
+                continue
 
-
-            time.sleep(1)
-
-            # 切換到pdf選擇視窗
-            chrome_browser.switch_to.window(chrome_browser.window_handles[-1])
-            print("Switch to pdf page: " + str(chrome_browser.current_url) + '\n')
-
-            target_table = fetch_target_table(chrome_browser)
-            if target_table is False:
+            if len(date.text) > 0:
+                print(f'date_{tr_index}  => ', date.text)
                 
-                print('\nPDF表格獲取失敗')
-                print('結束爬蟲')
-                logger.error(f'alphabet => {alphabet}, index => {index},  [ fetch_target_table ] failed.')
-                return
+                # for data like 'IJT 35(Suppl. 3):16-33, 2016'
+                if ', ' in date.text:
+                    year = date.text.split(', ')
+                elif ',' in date.text:
+                    year = date.text.split(',') 
                 
-            target_trs   = target_table.find_elements(By.XPATH, './tr')
+                # for data like '03/08/2022'
+                if len(year) > 1:
+                    year = year[1]
+                else:
+                    year = date.text.split('/')[2]
 
-            del(target_trs[0])
+                if int(year) >= int(latest_year):
+                    latest_year = year
+                    target = status
+            tr_index += 1
+
+        # New Status Found
+        if len(new_status_string) > 0:
+            for status in new_status_string:
+                D.logger.warning(f'  Ingredient  =>  {ingredient.text} , tr_index => {tr_index}')
+                D.logger.warning(f'  [ New Status ]  =>  {status}')
 
             
-            # download = False
-            latest_year = 1500
-            tr_index = 1
-            escape_status_string = ['Insufficient', 'not opened', 'Re-evaluation', 'No Reported Uses']
-            accept_status_string = ['Published Report', 'Final Report']
-            for tr in target_trs:
-                time.sleep(1)
-                
-                year = []
+        print('latest_year: ',latest_year)
+            
+        time.sleep(1)
 
-                tds = tr.find_elements(By.XPATH, './td')
+        D.downloader(alphabet, target, index)
 
-                ingredient = tds[0].find_element(By.XPATH, './font[@class="regtext"]')
-                status     = tds[1].find_element(By.XPATH, './table/tbody/tr/td/table/tbody/tr/td/font/a')
-                date       = tds[2].find_element(By.XPATH, './font')
-
-                if ingredient.text not in through:
-                    through.append(ingredient.text)
-
-                if status.text not in accept_status_string:
-                    logger.warning(f'alphabet => {alphabet}, index => {index}, tr_index => {tr_index}')
-                    logger.warning(f'{status.text},  [ accept_status_string ] failed.')
-                    continue
-
-                if len(date.text) > 0:
-                    print(f'date_{tr_index} => ', date.text)
-                    
-                    # for data like 'IJT 35(Suppl. 3):16-33, 2016'
-                    if ', ' in date.text:
-                        year = date.text.split(', ')
-                    elif ',' in date.text:
-                        year = date.text.split(',') 
-                    
-                    # for data like '03/08/2022'
-                    if len(year) > 1:
-                        year = year[1]
-                    else:
-                        year = date.text.split('/')[2]
-
-                    if int(year) >= int(latest_year):
-                        latest_year = year
-                        target = status
-                tr_index += 1
-
-                
-            print('latest_year: ',latest_year)
-                
-            time.sleep(1)
-
-            downloader(alphabet, target, index)
-
-            time.sleep(1)
+        time.sleep(1)
 
 
-            print('\nnums: ',len(through))
-            print(through)
+        print('\nnums: ',len(through))
+        # print(through)
 
-            index += 1
+        index += 1
+
+        result_path = f'{D.main_path}\\{alphabet}-result.txt'
+        with open(result_path, 'a') as f:
+            f.write(ingredient.text+'\n')
 
 
+        chrome_browser.close()
 
-            chrome_browser.close()
+        chrome_browser.switch_to.window(childs_window[alphabet])
 
-            chrome_browser.switch_to.window(childs_window[alphabet])
+    return through
 
 
 
 
+def signal_handler(signal='', frame=''):
+    print('\n\n------------- 您終止了爬蟲程序 -------------')
+    print('\n此次爬蟲...\n')
+    print('　第一筆資料為：　　',first)
+    print('最後一筆資料為：　　',last)
+    sys.exit(0)
+
+
+def reset_result_file(alphabet):
+    result_path = f'{main_path}\\{alphabet}-result.txt'
+    if os.path.isfile(result_path):
+        os.remove(result_path)
+
+
+
+
+def main():
+    # logging
+    logDir = 'crawler'
+    loggerName = logDir+'allLogger'
+    setup_logging(logDir)
+    logger = logging.getLogger(loggerName)
+
+
+    window = tk.Tk()
+    window.title('CIR parser')
+    window.geometry("500x100")
+    # 標示文字
+    label = tk.Label(window, text = 'Download path:')
+    label.pack()
+
+    # 輸入欄位
+    entry = tk.Entry(window, # 輸入欄位所在視窗
+        width = 50) # 輸入欄位的寬度
+    entry.pack(pady = 10)
+
+    # 建立按鈕
+    entry_btn = tk.Button(window, # 按鈕所在視窗
+        text = 'Start',  # 顯示文字
+        command=lambda: MyThread(download, entry.get(), logger)) # 按下按鈕所執行的函數
+    # 以預設方式排版按鈕
+    entry_btn.pack(side='top', pady=10)
+
+    window.protocol("WM_DELETE_WINDOW", signal_handler)
+
+    window.mainloop()
 
 
 
