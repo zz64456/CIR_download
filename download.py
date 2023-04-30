@@ -30,23 +30,32 @@ class Downloader:
 
 
 
-    def open_alphabet_tabs(self, chrome_browser, alphabets):
+    def open_alphabet_tabs(self, chrome_browser, alphabets, target_alphabet = False):
+        print('target: ', target_alphabet)
+    
         childs_window = {}
-        count = 0
+
         for alpha in alphabets:
-
             windows_old = chrome_browser.window_handles
-
+            find = False
+            if target_alphabet:
+                if target_alphabet == alpha.text:
+                    find = True
+                else:
+                    continue
             button = alpha.find_element(By.TAG_NAME, 'a')
             time.sleep(1.5)
             button.click()
-            count += 1
             print(f'Finish opening {alpha.text}')
 
             # matching opened windows
             windows_new = chrome_browser.window_handles
             new = list(set(windows_new) - set(windows_old))
             childs_window[alpha.text] = new[0]
+
+            if find:
+                break
+
         return childs_window
 
 
@@ -94,13 +103,13 @@ class Downloader:
                     finish = True
             try:
                 os.replace(default_file_path, file_path)
-                print('Download is finished')
+                print('Download is finished.')
             except Exception as e:
                 print(e)
                 self.logger.error(f'alphabet => {alphabet}, ingredient => {index},  Replace failed.')
             print('\nFile added !')
         else:
-            print("\nExists already")
+            print("\nExists already.")
 
 
 
