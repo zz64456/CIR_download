@@ -2,7 +2,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import os, time
+import os, time, shutil
 
 class Downloader:
 
@@ -82,11 +82,16 @@ class Downloader:
         print(f'\nfilename =>   [ {file_name}.pdf ]')
 
         default_file_path     = f'{self.main_path}\\{file_name}.pdf'
-        destination_directory = f'{self.main_path}\\pdf\\{alphabet}'
+        destination_directory = f'{self.main_path}\\pdf'
         file_path             = f'{destination_directory}\\{file_name}.pdf'
+        # total_temp_path       = f'{self.main_path}\\pdf\\total'
+        # total_temp_file_path  = f'{self.main_path}\\pdf\\total\\{file_name}.pdf'
 
         if not os.path.isdir(destination_directory):
             os.makedirs(destination_directory)
+
+        # if not os.path.isdir(total_temp_path):
+        #     os.makedirs(total_temp_path)
 
         if not os.path.isfile(file_path):
             print("\nIt's a new file. Start to Download it.")
@@ -102,6 +107,7 @@ class Downloader:
                 if os.path.isfile(default_file_path):
                     finish = True
             try:
+                # shutil.copyfile(default_file_path, total_temp_file_path)
                 os.replace(default_file_path, file_path)
                 print('Download is finished.')
             except Exception as e:
@@ -110,6 +116,8 @@ class Downloader:
             print('\nFile added !')
         else:
             print("\nExists already.")
+
+        return f'{file_name}.pdf'
 
 
 

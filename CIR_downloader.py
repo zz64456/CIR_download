@@ -133,6 +133,7 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
         escape_status_string = ['Insufficient', 'not opened', 'Re-evaluation', 'No Reported Uses', 'Use Not Supported']
         accept_status_string = ['Published Report', 'Final Report', 'Scientific Literature Review']
         new_status_string = []
+        ingredient_name = ''
         for tr in target_trs:
             time.sleep(1)
             
@@ -176,6 +177,7 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
                 if int(year) >= int(latest_year):
                     latest_year = year
                     target = status
+                    ingredient_name = ingredient.text
             tr_index += 1
 
         # New Status Found
@@ -193,19 +195,18 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
             
         time.sleep(1)
 
-        D.downloader(alphabet, target, index)
+        file_name = D.downloader(alphabet, target, index)
 
         time.sleep(1)
 
 
         print('\nnums: ',len(through))
-        # print(through)
 
         index += 1
 
         result_path = f'{D.main_path}\\{alphabet}-result.txt'
         with open(result_path, 'a') as f:
-            f.write(ingredient.text+'\n')
+            f.write(ingredient.text + ',' + file_name + '\n')
 
 
         chrome_browser.close()
