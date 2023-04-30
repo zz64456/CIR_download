@@ -3,11 +3,12 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support import expected_conditions as EC
 import logging
-import time, os, sys, signal, threading
+import time, os, sys, math, signal, threading
 import tkinter as tk
 from download import Downloader
 from loggy import setup_logging
 from thread import MyThread
+from functools import partial
 
 
 
@@ -17,16 +18,27 @@ last  = 'Null'
 
 
 def check_main_path():
-    if not os.path.isdir(main_path):
-        os.makedirs(main_path)
+    try:
+        if not os.path.isdir(main_path):
+            os.makedirs(main_path)
+    except FileNotFoundError:
+        print("\n請輸入目標資料夾。")
+        return False
+    return True
 
 
-
-def download(path, logger):
+def download(*args):
 
     global main_path
-    main_path = path
-    check_main_path()
+    main_path = args[0]
+    logger = args[1]
+    target_alphabet  = args[2]
+    if check_main_path() is False:
+        download_label['text'] = '所需資訊不足，請輸入目標資料夾路徑。'
+        print("\n所需資訊不足，請輸入目標資料夾路徑。")
+        return
+
+    download_label['text'] = f'[{target_alphabet}] 下載中...'
 
     D = Downloader(main_path, logger)
 
@@ -39,8 +51,10 @@ def download(path, logger):
     alphabets_div = chrome_browser.find_element(By.CLASS_NAME, 'glossary ')
     alphabets = alphabets_div.find_elements(By.CLASS_NAME, 'glossary-letter')
 
+    # 選取提示
+    alphabet_label['text'] = target_alphabet
     # 打開字母分頁
-    childs_window = D.open_alphabet_tabs(chrome_browser, alphabets)
+    childs_window = D.open_alphabet_tabs(chrome_browser, alphabets, target_alphabet)
 
     # TODO args[2] - alphabet
 
@@ -62,11 +76,15 @@ def download(path, logger):
 
         time.sleep(2)
 
-        # TODO args[3] - button
-
         reset_result_file(alphabet)
 
         download_list = choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
+
+        print(f'\n\n...................................')
+        print(f'\n................................... [{alphabet}] 下載完成。')
+        brief_download_list()
+        print('\n\n------------- 請選擇下一個字母 -------------')
+        download_label['text'] = f'現在可以選擇下一個字母'
 
     chrome_browser.quit()
         
@@ -141,7 +159,7 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
                 continue
 
             if len(date.text) > 0:
-                print(f'date_{tr_index}  => ', date.text)
+                print(f'Date {tr_index}  => ', date.text)
                 
                 # for data like 'IJT 35(Suppl. 3):16-33, 2016'
                 if ', ' in date.text:
@@ -163,11 +181,15 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
         # New Status Found
         if len(new_status_string) > 0:
             for status in new_status_string:
-                D.logger.warning(f'  Ingredient  =>  {ingredient.text} , tr_index => {tr_index}')
+                D.logger.warning(f'  [ Ingredient ]  =>  {ingredient.text}')
                 D.logger.warning(f'  [ New Status ]  =>  {status}')
 
             
-        print('latest_year: ',latest_year)
+        print('Latest Year: ',latest_year)
+
+        if '.pdf' not in target.get_attribute('href'):
+            D.logger.warning(f'  [ No PDF ]  ')
+            continue
             
         time.sleep(1)
 
@@ -193,13 +215,14 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
     return through
 
 
-
-
-def signal_handler(signal='', frame=''):
-    print('\n\n------------- 您終止了爬蟲程序 -------------')
+def brief_download_list():
     print('\n此次爬蟲...\n')
     print('　第一筆資料為：　　',first)
     print('最後一筆資料為：　　',last)
+
+def signal_handler(signal='', frame=''):
+    print('\n\n------------- 您終止了爬蟲程序 -------------')
+    brief_download_list()
     sys.exit(0)
 
 
@@ -218,25 +241,43 @@ def main():
     setup_logging(logDir)
     logger = logging.getLogger(loggerName)
 
-
     window = tk.Tk()
     window.title('CIR parser')
-    window.geometry("500x100")
+    window.geometry("700x250")
     # 標示文字
-    label = tk.Label(window, text = 'Download path:')
-    label.pack()
+    global download_label
+    download_label = tk.Label(window, text = 'Download path:')
+    download_label.grid(row=0, column=0, columnspan=10, padx=5, pady=2)
 
     # 輸入欄位
     entry = tk.Entry(window, # 輸入欄位所在視窗
-        width = 50) # 輸入欄位的寬度
-    entry.pack(pady = 10)
+        font=('Arial 10'),
+        width = 60)
+    entry.grid(row=1, column=0, columnspan=10, padx=5, pady=5)
 
-    # 建立按鈕
-    entry_btn = tk.Button(window, # 按鈕所在視窗
-        text = 'Start',  # 顯示文字
-        command=lambda: MyThread(download, entry.get(), logger)) # 按下按鈕所執行的函數
-    # 以預設方式排版按鈕
-    entry_btn.pack(side='top', pady=10)
+    # 建立字母按鈕
+    alphabets = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z']
+    cnt = 0
+    for alphabet in alphabets:
+        bg = 'grey'
+        if cnt%2 == 1:
+            bg = '#c9c7c7'
+        entry_btn = tk.Button(window, # 按鈕所在視窗
+            text = alphabet,  # 顯示文字
+            height= 2,
+            width = 5,
+            bg=bg,
+            command=lambda alphabet=alphabet: MyThread(download, entry.get(), logger, alphabet)) # 按下按鈕所執行的函數
+
+        r = math.floor(cnt / 7) + 3
+        c = cnt % 7
+        entry_btn.grid(row=r, column=c, padx=2, pady=3)
+
+        cnt += 1
+
+    global alphabet_label
+    alphabet_label = tk.Label(window, text = 'A', font='Arial 72', bg='green')
+    alphabet_label.grid(row=2, column=10, rowspan=5, ipadx=30, padx=60, pady=20)
 
     window.protocol("WM_DELETE_WINDOW", signal_handler)
 
