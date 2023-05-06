@@ -95,7 +95,7 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
     through = list()
     index = 0
 
-    # buttons = buttons[36:]        # 測試用
+    buttons = buttons[203:]        # 測試用
 
     actions = ActionChains(chrome_browser)
 
@@ -132,7 +132,6 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
         tr_index = 1
         escape_status_string = ['Insufficient', 'not opened', 'Re-evaluation', 'No Reported Uses', 'Use Not Supported']
         accept_status_string = ['Published Report', 'Final Report', 'Scientific Literature Review']
-        new_status_string = []
         ingredient_name = ''
         for tr in target_trs:
             time.sleep(1)
@@ -156,7 +155,11 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
             # Skip unknown status
             if status.text not in accept_status_string:
                 if status.text not in escape_status_string:
-                    new_status_string.append(status.text)
+                    D.logger.warning(f'  [ Ingredient ]  =>  {ingredient.text}')
+                    D.logger.warning(f'  [ New Status ]  =>  {status.text}')
+                    # TODO 
+                    # Turn escape_status_string list into txt file to load
+                    # And add new status into escape_status_string
                 continue
 
             if len(date.text) > 0:
@@ -180,34 +183,24 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
                     ingredient_name = ingredient.text
             tr_index += 1
 
-        # New Status Found
-        if len(new_status_string) > 0:
-            for status in new_status_string:
-                D.logger.warning(f'  [ Ingredient ]  =>  {ingredient.text}')
-                D.logger.warning(f'  [ New Status ]  =>  {status}')
 
             
-        print('Latest Year: ',latest_year)
-
-        if '.pdf' not in target.get_attribute('href'):
-            D.logger.warning(f'  [ No PDF ]  ')
-            continue
-            
-        time.sleep(1)
-
-        file_name = D.downloader(alphabet, target, index)
-
-        time.sleep(1)
+        print('Latest Year: ', latest_year)
+        print('\nnums: ', len(through))
 
 
-        print('\nnums: ',len(through))
+        if latest_year != 1500:
+            time.sleep(1)
+            file_name = D.downloader(alphabet, target, index)
+            time.sleep(1)
+            result_path = f'{D.main_path}\\{alphabet}-result.txt'
+            with open(result_path, 'a') as f:
+                f.write(ingredient_name + ',' + file_name + '\n')
+        else:
+            D.logger.warning('  [ No PDF ]  =>  ------------------')
+
 
         index += 1
-
-        result_path = f'{D.main_path}\\{alphabet}-result.txt'
-        with open(result_path, 'a') as f:
-            f.write(ingredient.text + ',' + file_name + '\n')
-
 
         chrome_browser.close()
 
