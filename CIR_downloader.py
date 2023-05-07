@@ -3,12 +3,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support import expected_conditions as EC
 import logging
-import time, os, sys, math, signal, threading
+import time, os, sys, math
 import tkinter as tk
 from download import Downloader
 from loggy import setup_logging
 from thread import MyThread
-from functools import partial
 
 
 
@@ -95,7 +94,7 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
     through = list()
     index = 0
 
-    # buttons = buttons[203:]        # 測試用
+    # buttons = buttons[378:]        # 測試用
 
     actions = ActionChains(chrome_browser)
 
@@ -191,7 +190,7 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
 
         if latest_year != 1500:
             time.sleep(1)
-            file_name = D.downloader(alphabet, target, index)
+            file_name = D.downloader(alphabet, target, ingredient_name)
             time.sleep(1)
             result_path = f'{D.main_path}\\{alphabet}-result.txt'
             with open(result_path, 'a') as f:

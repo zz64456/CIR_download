@@ -76,7 +76,7 @@ class Downloader:
 
     
 
-    def downloader(self, alphabet, target, index):
+    def downloader(self, alphabet, target, ingredient_name):
 
         file_name = target.get_attribute('href').split('.pdf')[0].split('/')[-1]
         print(f'\nfilename =>   [ {file_name}.pdf ]')
@@ -84,14 +84,9 @@ class Downloader:
         default_file_path     = f'{self.main_path}\\{file_name}.pdf'
         destination_directory = f'{self.main_path}\\pdf'
         file_path             = f'{destination_directory}\\{file_name}.pdf'
-        # total_temp_path       = f'{self.main_path}\\pdf\\total'
-        # total_temp_file_path  = f'{self.main_path}\\pdf\\total\\{file_name}.pdf'
 
         if not os.path.isdir(destination_directory):
             os.makedirs(destination_directory)
-
-        # if not os.path.isdir(total_temp_path):
-        #     os.makedirs(total_temp_path)
 
         if not os.path.isfile(file_path):
             print("\nIt's a new file. Start to Download it.")
@@ -112,7 +107,7 @@ class Downloader:
                 print('Download is finished.')
             except Exception as e:
                 print(e)
-                self.logger.error(f'alphabet => {alphabet}, ingredient => {index},  Replace failed.')
+                self.logger.error(f'alphabet => {alphabet}, ingredient => {ingredient_name},  Replace failed.')
             print('\nFile added !')
         else:
             print("\nExists already.")
