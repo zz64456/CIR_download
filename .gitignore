@@ -4,3 +4,4 @@ build/
 dist/log/
 log/
 result/
+*.pyc
