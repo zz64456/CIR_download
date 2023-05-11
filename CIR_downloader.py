@@ -31,7 +31,8 @@ def download(*args):
     global main_path
     main_path = args[0]
     logger = args[1]
-    target_alphabet  = args[2]
+    target_alphabet = args[2]
+    start = args[3].strip()
     if check_main_path() is False:
         download_label['text'] = '所需資訊不足，請輸入目標資料夾路徑。'
         print("\n所需資訊不足，請輸入目標資料夾路徑。")
@@ -55,8 +56,6 @@ def download(*args):
     # 打開字母分頁
     childs_window = D.open_alphabet_tabs(chrome_browser, alphabets, target_alphabet)
 
-    # TODO args[2] - alphabet
-
     # 照字母順序A-Z
     for alphabet in childs_window.keys(): 
 
@@ -75,9 +74,15 @@ def download(*args):
 
         time.sleep(2)
 
-        reset_result_file(alphabet)
+        offset = 1
+        if len(start) > 0:
+            print(f'\n Searching for [ {start} ] ...')
+            offset = get_index_from_ingredient(buttons, start)
+        
+        if not offset:
+            download_label['text'] = '找不到資料，請重新輸入。'
 
-        download_list = choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
+        choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window, offset)
 
         print(f'\n\n...................................')
         print(f'\n................................... [{alphabet}] 下載完成。')
@@ -89,12 +94,19 @@ def download(*args):
         
         
 
-def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window):
+def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window, offset):
     # list
     through = list()
     index = 0
 
-    # buttons = buttons[378:]        # 測試用
+    offset = int(offset) - 1
+    result_path = f'{D.main_path}\\{alphabet}-result.txt'
+    if int(offset) == 0:
+        reset_result_file(alphabet)
+    else:
+        result_path = f'{D.main_path}\\{alphabet}-result-{offset+1}.txt'
+
+    buttons = buttons[offset:]
 
     actions = ActionChains(chrome_browser)
 
@@ -119,18 +131,23 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
 
         target_table = D.fetch_target_table(chrome_browser)
         if target_table is False:
-            print('\nPDF表格獲取失敗')
-            print('結束爬蟲')
-            D.logger.error(f'alphabet => {alphabet}, index => {index},  [ fetch_target_table ] failed.')
-            return
+            D.logger.error(f' [ fetch_target_table ]')
+            D.logger.critical(f'  [ Ingredient ]  =>  {button.text}')
+            D.logger.critical(f'  [    Index   ]  =>  {index}')
+            D.logger.critical(f'  [    Fail    ]') # 沒下載
+            fail_txt(f'{D.main_path}\\fail.txt', ingredient.text)
+            continue
             
         target_trs   = target_table.find_elements(By.XPATH, './tr')
         del(target_trs[0])
         
         latest_year = 1500
         tr_index = 1
-        escape_status_string = ['Insufficient', 'not opened', 'Re-evaluation', 'No Reported Uses', 'Use Not Supported']
-        accept_status_string = ['Published Report', 'Final Report', 'Scientific Literature Review']
+        escape_status_string = ['Insufficient', 'not opened', 'Re-evaluation', 'No Reported Uses', 'Use Not Supported',
+                                'Report Terminated', 'Re-evaluation - Report not opened', 'Use Not Supported - Conditional',
+                                'Re-evaluation - Re-opened']
+        accept_status_string = ['Published Report', 'Final Report', 'Scientific Literature Review', 'Published Re-review Not Opened',
+                                'Tentative Report']
         ingredient_name = ''
         for tr in target_trs:
             time.sleep(1)
@@ -153,12 +170,14 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
 
             # Skip unknown status
             if status.text not in accept_status_string:
+                D.logger.warning(f'  [ Ingredient ]  =>  {ingredient.text}  |   [    Index   ]  =>  {index}')
                 if status.text not in escape_status_string:
-                    D.logger.warning(f'  [ Ingredient ]  =>  {ingredient.text}')
                     D.logger.warning(f'  [ New Status ]  =>  {status.text}')
                     # TODO 
                     # Turn escape_status_string list into txt file to load
                     # And add new status into escape_status_string
+                D.logger.critical(f' [ Skip ]') # 有可能沒下載
+                fail_txt(f'{D.main_path}\\skip.txt', ingredient.text)
                 continue
 
             if len(date.text) > 0:
@@ -167,6 +186,8 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
                 # for data like 'IJT 35(Suppl. 3):16-33, 2016'
                 if ', ' in date.text:
                     year = date.text.split(', ')
+                elif ',)' in date.text: # IJT 23 (Suppl.2:49-54,)2004
+                   year = date.text.split(',)') 
                 elif ',' in date.text:
                     year = date.text.split(',') 
                 
@@ -175,6 +196,13 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
                     year = year[1]
                 else:
                     year = date.text.split('/')[2]
+
+                if not year.isdigit():
+                    D.logger.warning(f'  [ Ingredient ]  =>  {ingredient.text}')
+                    D.logger.warning(f'  [ New Date ]  =>  {date.text}')
+                    D.logger.critical(f'  [   Skip   ]') # 有可能沒下載
+                    fail_txt(f'{D.main_path}\\skip.txt', ingredient.text)
+                    continue
 
                 if int(year) >= int(latest_year):
                     latest_year = year
@@ -192,11 +220,12 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
             time.sleep(1)
             file_name = D.downloader(alphabet, target, ingredient_name)
             time.sleep(1)
-            result_path = f'{D.main_path}\\{alphabet}-result.txt'
+            
             with open(result_path, 'a') as f:
                 f.write(ingredient_name + ',' + file_name + '\n')
         else:
             D.logger.warning('  [ No PDF ]  =>  ------------------')
+            fail_txt(f'{D.main_path}\\skip.txt', ingredient.text)
 
 
         index += 1
@@ -206,6 +235,21 @@ def choose_file_to_download(chrome_browser, D, alphabet, buttons, childs_window)
         chrome_browser.switch_to.window(childs_window[alphabet])
 
     return through
+
+
+def get_index_from_ingredient(buttons, ingredient):
+    for index, item in enumerate(buttons):
+        if item.text == ingredient:
+            return index +1 
+    return False
+
+
+def fail_txt(path, ingredient):
+    if not os.path.isfile(path):
+        open(path, "x")
+        
+    with open(path, 'a') as f:
+        f.write(ingredient + '\n')
 
 
 def brief_download_list():
@@ -260,13 +304,26 @@ def main():
             height= 2,
             width = 5,
             bg=bg,
-            command=lambda alphabet=alphabet: MyThread(download, entry.get(), logger, alphabet)) # 按下按鈕所執行的函數
+            command=lambda alphabet=alphabet: MyThread(download, entry.get(), logger, alphabet, start.get())) # 按下按鈕所執行的函數
 
         r = math.floor(cnt / 7) + 3
         c = cnt % 7
         entry_btn.grid(row=r, column=c, padx=2, pady=3)
 
         cnt += 1
+
+    # 指定開始位置
+    start_label = tk.Label(window, text = 'From', font='Arial 10')
+    start_label.grid(row=6, column=4, columnspan=4, padx=5, pady=2)
+    default_value = tk.StringVar()
+    default_value.set("")
+    start = tk.Entry(window, 
+        font=('Arial 11'),
+        width=40,
+        justify='center',
+        textvariable=default_value
+        )
+    start.grid(row=6, column=6, columnspan=5, padx=5, pady=5)
 
     global alphabet_label
     alphabet_label = tk.Label(window, text = 'A', font='Arial 72', bg='green')
